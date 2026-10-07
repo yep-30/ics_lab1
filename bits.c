@@ -298,12 +298,12 @@ int rotateRightBits(int x, int n) {
  *   Rating: 5
  */
 int roundEvenPow2(int x, int n) {
-    // low n bits form the mask; half = 2^(n-1)
+    //  half = 2^(n-1)
     int mask = (1 << n) + ~0;
     int half = 1 << (n + ~0);
-    // LSB of the truncated quotient; equals 1 when the floor multiple is odd
+    // 获取第 n 位的值
     int bit = (x >> n) & 1;
-    // add half + bit - 1, then truncate: ties push odd quotients up only
+    // 若第 n 位为 1，则加上 2^n，确保向上取整
     return (x + half + bit + ~0) & ~mask;
 }
 
@@ -320,16 +320,16 @@ int roundEvenPow2(int x, int n) {
  *   Rating: 5
  */
 int midpointTowardFirst(int x, int y) {
-    // carryless floor of (x+y)/2, never overflows
+
     int sum = (x & y) + ((x ^ y) >> 1);
     int odd = (x ^ y) & 1;
-    // decide x > y without overflow: opposite signs need no subtraction
+
     int sx = x >> 31;
     int sy = y >> 31;
     int diff = sx ^ sy;
     int gtSame = ~((x + ~y + 1) >> 31);
     int xgty = (diff & ~sx) | (~diff & gtSame);
-    // ceil only when odd sum and the midpoint must move toward the larger x
+
     return sum + (odd & xgty);
 }
 
@@ -344,8 +344,7 @@ int midpointTowardFirst(int x, int y) {
  *   Rating: 7
  */
 int isBetweenEitherOrder(int x, int a, int b) {
-    // less(u,v): opposite signs need no subtraction; same-sign diff is safe.
-    // x outside iff x is below both endpoints or above both (handles either order).
+    // x >= a && x <= b  <=>  (x - a) >= 0 && (b - x) >= 0
     int sx = x >> 31;
     int sa = a >> 31;
     int sb = b >> 31;
@@ -373,10 +372,9 @@ int isBetweenEitherOrder(int x, int a, int b) {
  *   Rating: 7
  */
 int mul5Sat(int x) {
-    // |x| > floor(INT_MAX/5) means 5x cannot fit in 32-bit
     int P = (0x19 << 24) + (0x99 << 16) + (0x99 << 8) + 0x99;
     int mul5 = (x << 2) + x;
-    // x > P  <=> x - P - 1 >= 0   (safe subtraction, same range)
+    // x > P  <=> x - P - 1 >= 0   
     int d = x + ~P;
     int gtPm = ~(d >> 31);
     // x < -P <=> x + P < 0
@@ -399,19 +397,19 @@ int mul5Sat(int x) {
  *   Rating: 7
  */
 int classifyAdd3(int x, int y, int z) {
-    // 33-bit view: true sum = s (wrapped) + (carries - negatives) * 2^32
+
     int ab = x + y;
     int s = ab + z;
-    // carry-out of each unsigned addition step
+
     int c1 = (((x & y) | ((x | y) & ~ab)) >> 31) & 1;
     int c2 = (((ab & z) | ((ab | z) & ~s)) >> 31) & 1;
     int C = c1 + c2;
     int sx = ((x >> 31) & 1) + ((y >> 31) & 1) + ((z >> 31) & 1);
     int d = C + ~sx + 1;
     int su = (s >> 31) & 1;
-    // d >= 1: always above INT_MAX; d == 0 with su: wrapped high half
+    // d >= 1
     int ge1 = !((d + ~1 + 1) >> 31);
-    // d <= -2: always below INT_MIN; d == -1: depends on wrapped sign
+    // d <= -2
     int dltm1 = (d + 1) >> 31;
     int dneg = (d >> 31) & 1;
     int isNeg1 = dneg & !dltm1;
@@ -439,26 +437,23 @@ unsigned floatScaleThreeHalves(unsigned uf) {
     unsigned frac = uf & 0x7FFFFF;
     unsigned t, r;
 
-    /* NaN / Inf: return unchanged */
     if (exp == 0xFF) return uf;
 
-    /* denormal (and zero): value = frac * 2^-149, result = round_even(3*frac)*2^-149 */
     if (exp == 0) {
         if (frac == 0) return uf;
         t = (frac << 1) + frac;
         r = (t >> 1) + ((t & 1) & ((t >> 1) & 1));
-        return sign | r; /* r < 2^23 stays denormal; bit23 would auto-normalize */
+        return sign | r; 
     }
 
-    /* normal: M = 2^23 + frac, work with t = 3M, then round t/2^k back to [2^23,2^24) */
-    t = (frac << 1) + frac + 0x1800000; /* 3*2^23 + 3*frac */
+ 
+    t = (frac << 1) + frac + 0x1800000; 
     if (t < 0x2000000) {
-        /* exponent stays: r = RNE(t/2) in [2^23, 2^24] */
         r = (t >> 1) + ((t & 1) & ((t >> 1) & 1));
         if (r >= 0x1000000) return sign | ((exp + 1) << 23);
         return sign | (exp << 23) | (r - 0x800000);
     }
-    /* t >= 2^25: exponent grows by 1, may overflow to Inf */
+
     if (exp >= 0xFE) return sign | 0x7F800000;
     r = (t >> 2) + (((t >> 1) & 1) & ((t & 1) | ((t >> 2) & 1)));
     return sign | ((exp + 1) << 23) | (r - 0x800000);
@@ -483,25 +478,25 @@ unsigned floatRoundEven(unsigned uf) {
     int E, drop;
     unsigned intPart, dropBits, half;
 
-    if (exp == 0xFF) return uf;          /* NaN / Inf */
-    if (exp < 126) return sign;          /* |v| < 0.5 -> signed zero */
-    if (exp == 126) {                    /* 0.5 <= |v| < 1 */
-        if (frac == 0) return sign;      /* exactly 0.5 -> even -> +/-0 */
-        return sign | 0x3F800000;        /* 0.5 < |v| < 1 -> +/-1 */
+    if (exp == 0xFF) return uf;          
+    if (exp < 126) return sign;          
+    if (exp == 126) {                   
+        if (frac == 0) return sign;     
+        return sign | 0x3F800000;        
     }
 
     E = exp - 127;
-    if (E >= 23) return uf;              /* already an integer */
+    if (E >= 23) return uf;              
 
-    drop = 23 - E;                       /* 1 <= drop <= 22 */
+    drop = 23 - E;                       
     intPart  = frac >> drop;
     dropBits = frac & ((1 << drop) - 1);
     half     = 1 << (drop - 1);
-    /* true integer part includes the implicit 1, so its LSB is flipped when E == 0 */
+
     if (dropBits > half ||
         (dropBits == half && ((E ? (intPart & 1) : (~intPart & 1))))) {
         intPart++;
-        if (intPart >> E) return sign | ((exp + 1) << 23); /* carry into exponent */
+        if (intPart >> E) return sign | ((exp + 1) << 23); 
         return sign | (exp << 23) | (intPart << drop);
     }
     return sign | (exp << 23) | (intPart << drop);
@@ -524,25 +519,24 @@ unsigned float_i2f(int x) {
     unsigned keep, gt, rest, mant;
 
     if (x == 0) return 0;
-    if (x == 0x80000000) return 0xCF000000; /* -(2^31) is exact */
+    if (x == 0x80000000) return 0xCF000000; /
     if (x < 0) { sign = 0x80000000; ax = -x; } else { ax = x; }
 
-    /* h = floor(log2(ax)): count shifts until the value vanishes (loop costs 2 ops) */
+ 
     h = 0;
     unsigned t = ax;
     while (t >>= 1) h++;
     exp = 127 + h;
 
     if (h > 23) {
-        /* drop r = h-23 low bits with guard/sticky round-to-nearest-even */
+ 
         r = h - 23;
         keep = ax >> r;
         gt = (ax >> (r - 1)) & 1;
         rest = ax & ((1 << (r - 1)) - 1);
         mant = keep + (gt & (!!rest | (keep & 1)));
-        if (mant >> 24) { mant >>= 1; exp++; } /* rounding carried out */
+        if (mant >> 24) { mant >>= 1; exp++; } 
     } else {
-        /* fits exactly, just align to the fraction field */
         mant = ax << (23 - h);
     }
     return sign | (exp << 23) | (mant & 0x7FFFFF);
@@ -559,7 +553,7 @@ unsigned float_i2f(int x) {
  *   Rating: 10
  */
 int bitCount(int x) {
-    // build legal masks from bytes 0x55/0x33/0x0F/0xFF
+    // 构造掩码
     int m1 = 0x55 | (0x55 << 8);
     m1 = m1 | (m1 << 16);
     int m2 = 0x33 | (0x33 << 8);
@@ -568,11 +562,11 @@ int bitCount(int x) {
     m4 = m4 | (m4 << 16);
     int m8 = 0xFF | (0xFF << 16);
 
-    // parallel merge: 1->2->4->8->16-bit counters
+    // 逐层折半求和
     x = (x & m1) + ((x >> 1) & m1);
     x = (x & m2) + ((x >> 2) & m2);
     x = (x & m4) + ((x >> 4) & m4);
-    x = (x + (x >> 8)) & m8;   /* keep full 8-bit counters per byte */
+    x = (x + (x >> 8)) & m8;   
     x = (x + (x >> 16)) & 0xFF;
     return x;
 }
