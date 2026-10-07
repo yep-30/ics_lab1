@@ -519,7 +519,7 @@ unsigned float_i2f(int x) {
     unsigned keep, gt, rest, mant;
 
     if (x == 0) return 0;
-    if (x == 0x80000000) return 0xCF000000; /
+    if (x == 0x80000000) return 0xCF000000; 
     if (x < 0) { sign = 0x80000000; ax = -x; } else { ax = x; }
 
  
